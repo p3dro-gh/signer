@@ -1,0 +1,9 @@
+{
+  "name": "Assinador Invisível",
+  "short_name": "Assinador",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4F46E5",
+  "icons": []
+}
