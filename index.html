@@ -1,0 +1,101 @@
+O fato de funcionar perfeitamente no computador e falhar no celular descarta qualquer erro na lógica de programação. Quando isso acontece, o problema geralmente está em **como o navegador móvel lida com a segurança (HTTPS), permissões ou o foco da tela**.
+
+Os motivos mais prováveis para o comportamento no celular são:
+
+---
+
+### 1. Problemas de Permissão com a Área de Transferência (`clipboard`)
+
+No código original, a função `assinar()` usa o comando `alert("Assinado! Copie o texto.")`. No entanto, muitos navegadores de celular (como o Chrome no Android ou o Safari no iOS) bloqueiam scripts que tentam manipular ou interagir com o texto de forma automática se não houver uma permissão explícita ou um gesto de toque direto mapeado por APIs modernas.
+
+* **O que acontece:** O celular pode estar bloqueando a execução silenciosa da função ou falhando ao tentar processar os caracteres invisíveis Unicode (`\u200b` e `\u200c`) devido ao teclado virtual.
+
+### 2. O Teclado Virtual modificando os Caracteres Invisíveis (O mais provável)
+
+Teclados inteligentes de celulares (Gboard, Samsung Keyboard, SwiftKey) possuem recursos como **correção automática, sugestão de texto e histórico de área de transferência**.
+
+* Quando você cola ou digita algo em um campo de texto no celular, o teclado muitas vezes "limpa" ou "ignora" caracteres invisíveis de largura zero, pois os considera erros de digitação ou espaços vazios indesejados.
+* No computador, o teclado físico envia o comando bruto direto para o navegador, mas no celular, **o sistema operacional e o teclado virtual filtram os dados** antes de chegarem ao JavaScript, apagando a sua assinatura invisível no momento em que você clica para verificar ou colar.
+
+### 3. Falta de suporte a `crypto.randomUUID()` em HTTP vs HTTPS
+
+Embora o GitHub Pages use HTTPS (o que é seguro), alguns navegadores móveis mais restritivos bloqueiam o uso de recursos criptográficos avançados (como a geração de IDs aleatórios) em contextos que eles consideram não seguros ou restritos a PWAs instalados.
+
+---
+
+### Como testar para descobrir a causa exata no celular:
+
+Para sabermos se o celular está rodando o código ou se travou em algum erro, podemos adicionar um `try/catch` com alertas visuais na tela.
+
+Cole este código atualizado no seu `index.html` (removendo o `.txt`) e faça o upload novamente para o GitHub:
+
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Assinador Invisível</title>
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <style>
+        body { font-family: sans-serif; padding: 16px; background: #f3f4f6; }
+        textarea { width: 100%; height: 150px; padding: 10px; font-size: 16px; margin-bottom: 10px; box-sizing: border-box; }
+        button { width: 100%; background: #4F46E5; color: white; border: none; padding: 14px; font-size: 16px; border-radius: 8px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h3>Assinador Mobile</h3>
+    <textarea id="texto" placeholder="Digite ou cole o texto aqui..."></textarea>
+    <button onclick="assinar()">Assinar Invisível</button>
+    <button onclick="verificar()">Verificar</button>
+
+    <script>
+        function textToInvisible(text) {
+            return [...text].map(c => c.charCodeAt(0).toString(2).padStart(8, '0'))
+                .join('').replace(/0/g, '\u200b').replace(/1/g, '\u200c');
+        }
+
+        function invisibleToText(text) {
+            let bin = text.replace(/\u200b/g, '0').replace(/\u200c/g, '1');
+            let res = "";
+            for(let i=0; i<bin.length; i+=8) res += String.fromCharCode(parseInt(bin.slice(i, i+8), 2));
+            return res;
+        }
+
+        function assinar() {
+            try {
+                let t = document.getElementById('texto').value;
+                // Usando um fallback caso o crypto.randomUUID falhe no mobile
+                let uuid = (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'id-manual-' + Math.random();
+                let payload = btoa(JSON.stringify({id: uuid, hash: "SHA256_placeholder"}));
+                document.getElementById('texto').value = textToInvisible(payload) + t;
+                alert("Sucesso ao assinar!");
+            } catch (err) {
+                alert("Erro ao assinar: " + err.message);
+            }
+        }
+
+        function verificar() {
+            try {
+                let t = document.getElementById('texto').value;
+                let inv = t.replace(/[^\u200b\u200c]/g, '');
+                if (inv.length === 0) {
+                    alert("Nenhum caractere invisível encontrado!");
+                    return;
+                }
+                let decoded = atob(invisibleToText(inv));
+                alert("Dados extraídos: " + decoded);
+            } catch (err) {
+                alert("Erro ao verificar: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
+```
+
+Faça o teste com essa versão no celular e me diga qual alerta aparece (se dá "Sucesso ao assinar" ou se exibe algum "Erro ao assinar"). Isso revelará se o bloqueio é no código ou no teclado do aparelho.
